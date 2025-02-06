@@ -1,0 +1,82 @@
+name: Format Code
+run-name: Format Code
+
+on:
+  workflow_call:
+    inputs:
+      commit-message:
+        required: false
+        type: string
+        default: "style: format code"
+        description: The commit message
+      no-ci:
+        required: false
+        type: boolean
+        default: true
+        description: Whether to add [no-ci] to the footer of the commit message
+      check-format-script:
+        required: false
+        type: string
+        default: "check-format"
+        description: The script name to check if the code is formatted
+      format-script:
+        required: false
+        type: string
+        default: "format"
+        description: The script name to format the code
+      app-id:
+        required: false
+        type: string
+        description: The github app ID
+
+    secrets:
+      private-key:
+        required: false
+        description: The github app private key
+      token:
+        required: false
+        description: The github token
+
+jobs:
+  format:
+    name: Format Code
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: CSI
+        id: csi
+        uses: trdev20-actions/csi@v1.1.0
+        with:
+          node-version: 20
+          app-id: ${{ inputs.app-id }}
+          private-key: ${{ secrets.private-key }}
+          token: ${{ secrets.token }}
+
+      - name: Check format
+        id: check-format
+        run: |
+          ${{ steps.csi.outputs.package-manager }} run ${{ inputs.check-format-script }} || echo "needs-format=true" >> $GITHUB_OUTPUT
+
+      - name: Format code
+        if: steps.check-format.outputs.needs-format == 'true'
+        run: ${{ steps.csi.outputs.package-manager }} run ${{ inputs.format-script }}
+
+      - name: Commit changes
+        if: steps.check-format.outputs.needs-format == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Set the commit message
+          msg="${{ inputs.commit-message }}"
+
+          # Add [no-ci] to the commit message if no-ci is true
+          if [ "${{ inputs.no-ci }}" = "true" ]; then
+            msg=$msg$'\n\n''[no-ci]'
+          fi
+
+          # Commit the changes
+          git add .
+          git commit -m "$msg"
+          git push
