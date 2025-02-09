@@ -14,16 +14,14 @@ on:
         type: boolean
         default: true
         description: Whether to add [no-ci] to the footer of the commit message
-      check-format-script:
+      check-format:
         required: false
         type: string
-        default: "check-format"
-        description: The script name to check if the code is formatted
-      format-script:
+        description: Command to check if the code needs to be formatted (default = <detected-package-manager> run check-format)
+      format:
         required: false
         type: string
-        default: "format"
-        description: The script name to format the code
+        description: Command to format the code (default = <detected-package-manager> run format)
       app-id:
         required: false
         type: string
@@ -56,11 +54,20 @@ jobs:
       - name: Check format
         id: check-format
         run: |
-          ${{ steps.csi.outputs.package-manager }} run ${{ inputs.check-format-script }} || echo "needs-format=true" >> $GITHUB_OUTPUT
+          if [ -n "${{ inputs.check-format }}" ]; then
+            ${{ inputs.check-format }} || echo "needs-format=true" >> $GITHUB_OUTPUT
+          else
+            ${{ steps.csi.outputs.package-manager }} run check-format || echo "needs-format=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Format code
         if: steps.check-format.outputs.needs-format == 'true'
-        run: ${{ steps.csi.outputs.package-manager }} run ${{ inputs.format-script }}
+        run: |
+          if [ -n "${{ inputs.format }}" ]; then
+            ${{ inputs.format }}
+          else
+            ${{ steps.csi.outputs.package-manager }} run format
+          fi
 
       - name: Commit changes
         if: steps.check-format.outputs.needs-format == 'true'
@@ -68,10 +75,10 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Set the commit message
-          msg="${{ inputs.commit-message }}"
-
+          
           # Add [no-ci] to the commit message if no-ci is true
+          
+          msg="${{ inputs.commit-message }}"
           if [ "${{ inputs.no-ci }}" = "true" ]; then
             msg=$msg$'\n\n''[no-ci]'
           fi
